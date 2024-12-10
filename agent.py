@@ -14,6 +14,7 @@ class Player():
         self.has_key = False
         self.escaped = False
         self.story = ""
+        self.system_prompt = ""
         self.actions = []
         self.votes = []
         self.witness = False 
@@ -34,6 +35,9 @@ class Player():
         if "gpt" in agent:
             self.agent = "gpt"
             self.model = agent[4:]
+        elif agent == "llama":
+            self.agent = "gpt"
+            self.model = agent
         else:
             self.agent = agent
         assert self.agent in ["cli", "random", "gpt", "api"], \
@@ -99,14 +103,14 @@ class Player():
                 action_int = self.get_gpt_action(action_prompt)
 
             # Validate action
-            try:
-                assert type(action_int) == int, \
-                    "Selected action is not an integer"
-                assert action_int in action_int_list, \
-                    "Selected action is not in action_int_list"
-                valid_action = True
-            except:
-                print("Invalid action. Please try again.")
+            # try:
+            assert type(action_int) == int, \
+                "Selected action is not an integer"
+            assert action_int in action_int_list, \
+                "Selected action is not in action_int_list"
+            valid_action = True
+            # except:
+            #     print("Invalid action. Please try again.")
 
         action_text = self.decode_action(action_prompt, action_int)
 
@@ -137,7 +141,7 @@ class Player():
 
     def get_gpt_action(self, action_prompt, argmax=False):
         action_dict = self.extract_list_items(action_prompt)
-        option_probs = self.gpt.get_probs(self.story + action_prompt, action_dict, self.model)
+        option_probs = self.gpt.get_probs(self.story + action_prompt, action_dict, self.model, system_prompt=self.system_prompt)
 
         if argmax:
             selected_action = max(option_probs, key=option_probs.get)
@@ -196,7 +200,7 @@ class Player():
             max_tokens = 50, 
             model = self.model,
             # To limit GPT to providing one player's dialogue
-            stop_tokens = ['"'] 
+            stop_tokens = ['"'], system_prompt=self.system_prompt
         )
         return response
 

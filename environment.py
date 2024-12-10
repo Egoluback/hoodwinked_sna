@@ -116,7 +116,7 @@ class Game():
         action_prompts = [self.format_prompt(p, self.prompts['action']) 
                           for p in players]
         for player, prompt in zip(players, action_prompts):
-            player.get_action(prompt)
+            print(f"Player {player.name} \n ######## Action {player.get_action(prompt)}")
 
     def update_state(self):
         """
@@ -399,16 +399,17 @@ class Game():
     def load_initial_story(self):
         for player in self.players:
             # Initialize the story with the game rules
-            player.story += self.prompts['rules']
+            # player.story += self.prompts['rules']
+            player.system_prompt += self.prompts['rules']
 
             # Add the player's identity
             if player.killer == True:
-                player.story += self.prompts['identity_killer']
+                player.system_prompt += self.prompts['identity_killer']
             else:
-                player.story += self.prompts['identity_innocent']
+                player.system_prompt += self.prompts['identity_innocent']
 
             # Format the story variables
-            player.story = self.format_prompt(player, player.story)
+            player.system_prompt = self.format_prompt(player, player.story)
 
     def load_actions(self, player):
         if not player.alive: return []
