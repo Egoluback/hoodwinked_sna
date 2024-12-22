@@ -42,6 +42,11 @@ class Game():
         # Shuffle order of players
         random.shuffle(self.players)
 
+        # Initialize players' graphs
+        player_names = [player.name for player in self.players]
+        for player in self.players:
+            player.graph = {name: 5 for name in player_names if name != player.name}
+
         # Initialize game state
         self.killer_id = [i for i, player in enumerate(
             self.players) if player.killer == True][0]
@@ -268,9 +273,12 @@ class Game():
                 discussion_log += str(player.name) + ': "'
                 statement = player.get_statement(discussion_log)
                 discussion_log += statement
+                # # think on graph
                 
-            for player in self.get_active_players():
-                player.story += discussion_log
+                for player in self.get_active_players():
+                    new_info = str(player.name) + ': "' + statement
+                    player.update_graph(new_info)
+                    player.story += new_info
             
             print(discussion_log)
             
@@ -339,6 +347,7 @@ class Game():
         # Record the vote summary for each player
         for player in self.get_active_players():
             player.story += vote_summary
+            # think about votes and update graph
         
     def endgame(self):
         # Killer banished
