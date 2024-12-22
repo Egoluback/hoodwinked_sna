@@ -20,6 +20,7 @@ class Player():
         self.witness = False 
         self.witness_during_vote = []
         self.awaiting_response = False
+        self.graph = {}
 
         # Set the initial location
         if start_location == "random":
@@ -139,9 +140,13 @@ class Player():
             list_items[num] = content
         return list_items
 
-    def get_gpt_action(self, action_prompt, argmax=False):
+    def get_gpt_action(self, action_prompt, argmax=False, use_graph=True):
+        if use_graph:
+            graph_prompt = self.get_graph_prompt()
+        else:
+            graph_prompt = ''
         action_dict = self.extract_list_items(action_prompt)
-        option_probs = self.gpt.get_probs(self.story + action_prompt, action_dict, self.model, system_prompt=self.system_prompt)
+        option_probs = self.gpt.get_probs(self.story + graph_prompt + action_prompt, action_dict, self.model, system_prompt=self.system_prompt)
 
         if argmax:
             selected_action = max(option_probs, key=option_probs.get)
@@ -195,8 +200,9 @@ class Player():
         return input()
 
     def get_gpt_statement(self, action_prompt):
+        graph_prompt = self.get_graph_prompt()
         response = self.gpt.generate(
-            prompt = self.story + action_prompt, 
+            prompt = self.story + graph_prompt + action_prompt,
             max_tokens = 50, 
             model = self.model,
             # To limit GPT to providing one player's dialogue
@@ -204,6 +210,66 @@ class Player():
         )
         return response
 
+    def get_graph_prompt(self):
+        prompt = "Based on previous actions of other players, you analysed how likely they are to be killers on a scale from 1 (definitely innocent) to 10 (definitely killer):\n"
+        for player, score in self.graph:
+            prompt += f'{player}: {score}\n'
+        return prompt
+
+    def update_graph(self, new_info: str):
+        current_graph_data = '\n'.join([f'{player}: {score}' for player, score in self.graph])
+        think_prompt = f"Let's take a moment to think. Here is what happened in the game so far:\n {self.story}\n. Up to this point, this was your opinion of how likely other players are to be killers on a scale from 1 (definitely innocent) to 10 (definitely killer): {current_graph_data}. Now you heard a new statement during the discussion: {new_info}.\n"
+        new_graph = {}
+        for player, score in self.graph:
+            player_prompt = f"What score would you give now to player {player}?\n"
+            response = self.gpt.generate(
+                prompt = think_prompt + player_prompt,
+                max_tokens = 50, 
+                model = self.model,
+                # To limit GPT to providing one player's dialogue
+                stop_tokens = ['"'], system_prompt=self.system_prompt
+            )
+            new_graph = self.get_graph_score(response)
+        assert set(self.graph.keys()) == set(self(new_graph.keys()))
+        self.graph = new_graph
+
+    def get_graph_score(self, action_prompt):
+        """
+        """
+        # Mark state as awaiting_response
+        self.awaiting_response = True
+
+        # Parse action prompt for valid actions
+        action_int_list = [
+            int(n) for n in re.findall("[0-9]", 
+            action_prompt.split("Possible Scores:")[-1])
+        ]
+        valid_action = False
+
+        # Get and validate action
+        while valid_action == False:
+            # Get action
+            if self.agent == "random":
+                action_int = self.get_random_action(action_int_list)
+            elif self.agent == "cli":
+                action_int = self.get_cli_action(
+                    action_int_list, action_prompt)
+            elif self.agent == "gpt":
+                action_int = self.get_gpt_action(action_prompt, use_graph=False)
+
+            # Validate action
+            # try:
+            assert type(action_int) == int, \
+                "Selected action is not an integer"
+            assert action_int in action_int_list, \
+                "Selected action is not in action_int_list"
+            valid_action = True
+            # except:
+            #     print("Invalid action. Please try again.")
+
+        return action_int
+
+    
     def get_vote(self, vote_prompt):
         if self.agent == "random":
             vote_int = self.get_random_vote(vote_prompt)
