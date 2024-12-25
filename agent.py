@@ -1,9 +1,10 @@
 import random
 import re
 import re
+from tqdm import tqdm
 
 class Player():
-    def __init__(self, name, killer, agent, start_location="random"):
+    def __init__(self, name, killer, agent, start_location="random", graph_guidance=False):
         """
         Initializes a player with the given name and identity. 
         """
@@ -20,6 +21,10 @@ class Player():
         self.witness = False 
         self.witness_during_vote = []
         self.awaiting_response = False
+        self.graph_guidance = graph_guidance
+        # self.graph_guidance = True
+        self.graph = {}
+        self.graph_copy = {} # to save the graph with relationships with all people, not only active players
 
         # Set the initial location
         if start_location == "random":
@@ -53,6 +58,7 @@ class Player():
             "story": self.story,
             "actions": self.actions,
             "votes": self.votes,
+            "graph": self.graph
         }
 
         if not self.killer:
@@ -139,10 +145,14 @@ class Player():
             list_items[num] = content
         return list_items
 
-    def get_gpt_action(self, action_prompt, argmax=False):
-        action_dict = self.extract_list_items(action_prompt)
-        option_probs = self.gpt.get_probs(self.story + action_prompt, action_dict, self.model, system_prompt=self.system_prompt)
-
+    def get_gpt_action(self, action_prompt, argmax=False, use_graph=True, action_dict=None):
+        if use_graph:
+            graph_prompt = self.get_graph_prompt()
+        else:
+            graph_prompt = ''
+        if action_dict is None:
+            action_dict = self.extract_list_items(action_prompt)
+        option_probs = self.gpt.get_probs(self.story + graph_prompt + action_prompt, action_dict, self.model, system_prompt=self.system_prompt)
         if argmax:
             selected_action = max(option_probs, key=option_probs.get)
         else:
@@ -177,13 +187,13 @@ class Player():
 
         return action_text
 
-    def get_statement(self, discussion_log):
+    def get_statement(self, discussion_log, use_graph=True):
         if self.agent == "random":
             statement = self.get_idk_statement()
         elif self.agent == "cli":
             statement = self.get_cli_statement(discussion_log)
         elif self.agent == "gpt":
-            statement = self.get_gpt_statement(discussion_log)
+            statement = self.get_gpt_statement(discussion_log, use_graph=use_graph)
         return statement + '"\n'
 
     def get_idk_statement(self):
@@ -194,16 +204,83 @@ class Player():
         print(discussion_log)
         return input()
 
-    def get_gpt_statement(self, action_prompt):
-        response = self.gpt.generate(
-            prompt = self.story + action_prompt, 
-            max_tokens = 50, 
-            model = self.model,
-            # To limit GPT to providing one player's dialogue
-            stop_tokens = ['"'], system_prompt=self.system_prompt
-        )
+    def get_gpt_statement(self, action_prompt, use_graph=True):
+        graph_prompt = ''
+        if use_graph:
+            graph_prompt = self.get_graph_prompt()
+
+        response = ':' # To stop the model from speaking for someone else
+        while ':' in response: # clean up this shit, make something more beautiful
+            response = self.gpt.generate(
+                prompt = self.story + graph_prompt + action_prompt,
+                max_tokens = 50, 
+                model = self.model,
+                # To limit GPT to providing one player's dialogue ## doesnt work :(
+                stop_tokens = ['"'], system_prompt=self.system_prompt
+            )
         return response
 
+    def get_graph_prompt(self):
+        if not self.graph_guidance:
+            return ''
+        prompt = "Based on previous actions of other players, you analysed your relationship with each of them on a scale from 1 (your enemy) to 10 (your friend):\n"
+        for player, score in self.graph.items():
+            prompt += f'{player}: {score}\n'
+        return prompt
+
+    def update_graph(self, discussion_log: str):
+        if not self.graph_guidance: return
+        current_graph_data = '\n'.join([f'{player}: {score}' for player, score in self.graph.items()])
+        # think_prompt = f"Let's take a moment to think. Here is what happened in the game so far:\n {self.story}\n. Up to this point, this was your opinion of how likely other players are to be killers on a scale from 1 (definitely innocent) to 10 (definitely killer): {current_graph_data}."
+        think_prompt = f"{self.story + discussion_log}\n Let's take a moment to think. Give each person a rating based on their suspicion: how often did he lie, suspect you, or just behave badly.\n"
+        new_graph = {}
+        # print(self.name)
+        for player, score in self.graph.items():
+            # print(player)
+            player_prompt = f"What score would you give now to player {player} on a scale from 1 (your enemy) to 10 (your friend)?\n"
+            gpt_long_score = self.get_statement(think_prompt + player_prompt).replace('\n', '')
+            gpt_long_prompt = f"What score is given to {player}, based on this statement (from 1 to 10)? \n\"\"{gpt_long_score}\"\"\nAnswer with just a single number.\n"
+            new_graph[player] = self.get_graph_score(gpt_long_prompt)
+            self.graph_copy[player] = new_graph[player]
+            # print(gpt_long_prompt + str(new_graph[player]))
+        assert set(self.graph.keys()) == set(new_graph.keys())
+        print(f"{self.name}'s graph: {new_graph}")
+        self.graph = new_graph
+
+    def get_graph_score(self, action_prompt):
+        """
+        """
+        # Mark state as awaiting_response
+        self.awaiting_response = True
+
+        # Parse action prompt for valid actions
+        action_int_list = [n for n in range(1, 11)]
+        action_dict = {i: str(i) for i in action_int_list}
+        valid_action = False
+
+        # Get and validate action
+        while valid_action == False:
+            # Get action
+            if self.agent == "random":
+                action_int = self.get_random_action(action_int_list)
+            elif self.agent == "cli":
+                action_int = self.get_cli_action(
+                    action_int_list, action_prompt)
+            elif self.agent == "gpt":
+                action_int = self.get_gpt_action(action_prompt, use_graph=False, action_dict=action_dict)
+            # Validate action
+            # try:
+            assert type(action_int) == int, \
+                "Selected action is not an integer"
+            assert action_int in action_int_list, \
+                "Selected action is not in action_int_list"
+            valid_action = True
+            # except:
+            #     print("Invalid action. Please try again.")
+
+        return action_int
+
+    
     def get_vote(self, vote_prompt):
         if self.agent == "random":
             vote_int = self.get_random_vote(vote_prompt)
@@ -256,6 +333,7 @@ class Player():
         self.eval['actions'] = self.actions
         self.eval['votes'] = self.votes
         self.eval['witness_during_vote'] = self.witness_during_vote
+        self.eval['graph'] = self.graph_copy
 
         # Voting Metrics
         if len(self.eval['votes']) > 0:

@@ -72,7 +72,7 @@ class GPT():
                 max_new_tokens=512,
                 eos_token_id=self.terminators,
                 do_sample=True,
-                temperature=0.6,
+                temperature=0.9,
                 top_p=0.9)[0]["generated_text"][-1]['content']
         else:
             # Get the correct string to describe the model
@@ -167,7 +167,7 @@ class GPT():
                 for num, action in option_dict.items():
                     if (str(num) in response) or (action in response):
                         votes[num] += 1
-
+                
                 iters += 1
                 if iters == max_iters:
                     votes = {k: 1 for k in option_dict.keys()}

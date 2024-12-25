@@ -6,6 +6,9 @@ from environment import Game
 from agent import Player
 import warnings
 import argparse
+
+from tqdm import tqdm
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 """
@@ -22,7 +25,9 @@ def run_job(
     innocent_agent: str, 
     discussion: bool, 
     start_location: str,
-    eval_cols: list[str],
+    eval_cols,
+    impostor_graph_guidance,
+    innocent_graph_guidance
 ):
     """
     Runs a number of games with the given specifications. 
@@ -33,6 +38,7 @@ def run_job(
 
     # Run each game and store results
     for i in range(1, num_games+1):
+        print("-"*15 + f"GAME {i}/{num_games}" + "-"*15)
         try:
             # Time the game
             start_time = time.time()
@@ -42,7 +48,7 @@ def run_job(
             game = Game(discussion=discussion)
 
             # Load the players into the game
-            game.load_random_players(num_players, impostor_agent, innocent_agent)
+            game.load_random_players(num_players, impostor_agent, innocent_agent, impostor_graph_guidance, innocent_graph_guidance)
 
             # Play the game
             player_dicts = game.play()
@@ -53,7 +59,7 @@ def run_job(
 
             # Condense player dicts into a single dictionary
             for player_dict in player_dicts:
-                for k in list(eval_dict.keys())[4:]:
+                for k in list(eval_dict.keys())[6:]:
                     if k in player_dict.keys():
                         eval_dict[k].append(player_dict[k])
                     else:
@@ -66,11 +72,13 @@ def run_job(
             eval_dict["runtime"].extend([runtime for _ in range(num_players)])
             eval_dict["num_players"].extend([num_players for _ in range(num_players)])
             eval_dict["discussion"].extend([discussion for _ in range(num_players)])
+            eval_dict["impostor_graph_guidance"].extend([impostor_graph_guidance for _ in range(num_players)])
+            eval_dict["innocent_graph_guidance"].extend([innocent_graph_guidance for _ in range(num_players)])
 
             # Count API hits for monitoring
-            api_hits = sum(eval_dict['num_turns'][-num_players:]) + \
-                sum([i if (type(i)!=str) else 0 for i in eval_dict['num_killed'][-num_players:]]) * 2 * num_players
-            print(f'api_hits: {api_hits}')
+            # api_hits = sum(eval_dict['num_turns'][-num_players:]) + \
+            #     sum([i if (type(i)!=str) else 0 for i in eval_dict['num_killed'][-num_players:]]) * 2 * num_players
+            # print(f'api_hits: {api_hits}')
 
             if i % 10 == 0:
                 temp_save(eval_dict)
@@ -95,33 +103,39 @@ def get_save_path():
     """
     Returns a pathname to be used throughout the evaluation. 
     """
-    save_dir = 'results'
-    if not os.path.exists(save_dir): os.makedirs(save_dir)
-    file_name = str(len([name for name in os.listdir(save_dir)
-                    if os.path.isfile(os.path.join(save_dir, name))]))
-    full_path = save_dir + '/' + file_name + '.csv'
-    return full_path
+    return "results/graph_guidance_exp_3.csv"
+    # save_dir = 'results'
+    # if not os.path.exists(save_dir): os.makedirs(save_dir)
+    # file_name = str(len([name for name in os.listdir(save_dir)
+    #                 if os.path.isfile(os.path.join(save_dir, name))]))
+    # full_path = save_dir + '/' + file_name + '.csv'
+    # return full_path
 
 if __name__ == "__main__":
     # Read the command line argument for the job number
-    parser = argparse.ArgumentParser(description='Process the job number.')
-    parser.add_argument('--job_number', type=int, required=True, help='Which .csv file in the /jobs folder to run')
-    parser.add_argument('job_number', type=int, 
-    args = parser.parse_args()
-    job_number = args.job_number
+    # parser = argparse.ArgumentParser(description='Process the job number.')
+    # parser.add_argument('--job_number', type=int, required=True, help='Which .csv file in the /jobs folder to run')
+    # parser.add_argument('job_number', type=int)
+
+    # args = parser.parse_args()
+    # job_number = args.job_number
+
+    job_name = "graph_guidance_exp_3"
 
     # Read the schedule of jobs
-    schedule = pd.read_csv(f"jobs/{job_number}.csv")
+    schedule = pd.read_csv(f"jobs/{job_name}.csv")
     save_path = get_save_path()
+    print(save_path)
+    # save_path = f"{job_name}_1"
     
     # Set up the evaluation structure
     results_cols = [
-        "game_num", "runtime", "num_players", "discussion",
+        "game_num", "runtime", "num_players", "discussion", 'impostor_graph_guidance', "innocent_graph_guidance",
         "name", "agent", "killer", "num_turns", "banished",
         "killed", "escaped", "num_killed", "num_escaped", 
         "duplicate_search_rate", "vote_rate_for_self", "vote_rate_for_killer", 
         "witness_vote_rate_for_killer", "non_witness_vote_rate_for_killer",
-        "story", "actions", "votes", "witness_during_vote",
+        "story", "actions", "votes", "witness_during_vote", 'graph'
     ]
     results = {colname: [] for colname in results_cols}
 
@@ -132,6 +146,8 @@ if __name__ == "__main__":
             num_players = row['num_players'],
             impostor_agent = row['impostor_agent'],
             innocent_agent = row['innocent_agent'],
+            impostor_graph_guidance = row['impostor_graph_guidance'],
+            innocent_graph_guidance = row['innocent_graph_guidance'],
             discussion = row['discussion'],
             start_location = row['start_location'],
             eval_cols = results_cols
