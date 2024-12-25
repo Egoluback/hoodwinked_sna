@@ -1,4 +1,4 @@
-# Using graph structure to contain player's relationships in Hoodwinked
+# Using graph structure to contain player relationships in Hoodwinked
 
 [Presentation (in russian)](https://docs.google.com/presentation/d/1sCFkz34Qzv9lIhDiMWedF-vXo9Ch_3wh8cOGBJJqPq8/edit?usp=sharing)
 
