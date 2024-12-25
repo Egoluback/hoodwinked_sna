@@ -8,7 +8,7 @@ This repo is based on "[Hoodwinked: Cooperation and Deception in a Text-Based Ga
 In games like Hoodwinked, LLM agents can usually lose some important information about other players and their actions. In some studies, it is common to use context summarization to extract important things. <br />
 Our approach is to create a knowledge graph for each agent about other players and fill it with ratings based on people's actions and statements. This graph then helps the LLM focus on what's important, remembering who their friend is and who their enemy is. <br />
 ## Report
-We are using LLama 3.1 8b-Instruct as primary agent model. The results can be significantly improved by using larger model (e.g. GPT-4, whuch was used in original paper). <br />
+We are using LLama 3.1 8b-Instruct as primary agent model. The results can be significantly improved by using larger model (e.g. GPT-4, which was used in original paper). <br />
 Current game stages:
 1. Daytime players activities (searching the key)
 2. Someone's got murdered
