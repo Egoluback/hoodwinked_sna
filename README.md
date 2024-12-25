@@ -22,7 +22,7 @@ Current game stages:
 - we noticed a bad LLama 3.1 8b ability to remember all complex instructions about the game. We had to make complex system prompt and lots of modifications of other prompts to avoid confusions and inadequate behaviour
 - we noticed model's unability to rate other players in zero-shot (without detailed thinking in natural language). We assume it will also improve by using larger model
 ### Experiments
-All experiments were performed on a100 40g videocard. <br />
+All experiments were performed on a100 40g gpu. <br />
 Each experiment has at least 50 games and their results (calculated statistics) can be reproduced.
 ### Results
 You can find all metrics calculations in <code>results/analysis.ipynb</code> <br />
